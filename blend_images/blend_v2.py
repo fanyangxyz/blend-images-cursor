@@ -53,103 +53,14 @@ def _optimize_memory_for_device(device: torch.device):
         gc.collect()
 
 
-def _extract_key_elements(caption: str) -> dict:
-    """Extract key elements from an image caption for better blending."""
-    # Simple extraction of key elements
-    elements = {
-        'subjects': [],
-        'objects': [],
-        'colors': [],
-        'settings': [],
-        'style': [],
-        'mood': []
-    }
-    
-    # Common subjects
-    subjects = ['person', 'people', 'man', 'woman', 'child', 'dog', 'cat', 'animal', 'bird']
-    for subject in subjects:
-        if subject in caption.lower():
-            elements['subjects'].append(subject)
-    
-    # Common objects
-    objects = ['car', 'house', 'tree', 'flower', 'mountain', 'ocean', 'sky', 'building', 'road']
-    for obj in objects:
-        if obj in caption.lower():
-            elements['objects'].append(obj)
-    
-    # Colors
-    colors = ['red', 'blue', 'green', 'yellow', 'black', 'white', 'brown', 'gray', 'pink', 'purple', 'orange']
-    for color in colors:
-        if color in caption.lower():
-            elements['colors'].append(color)
-    
-    # Settings/locations
-    settings = ['beach', 'forest', 'city', 'park', 'indoor', 'outdoor', 'landscape', 'portrait', 'street']
-    for setting in settings:
-        if setting in caption.lower():
-            elements['settings'].append(setting)
-    
-    return elements
-
-
 def _create_blend_prompt(captions: List[str], blend_strategy: str = "artistic_merge") -> str:
     """Create a text prompt that describes the blend of multiple images."""
-    
-    # Extract key elements from each caption
-    all_elements = {'subjects': [], 'objects': [], 'colors': [], 'settings': [], 'style': [], 'mood': []}
-    
-    for caption in captions:
-        elements = _extract_key_elements(caption)
-        for key in all_elements:
-            all_elements[key].extend(elements[key])
-    
-    # Remove duplicates while preserving order
-    for key in all_elements:
-        all_elements[key] = list(dict.fromkeys(all_elements[key]))
-    
-    # Create blend prompt based on strategy
     if blend_strategy == "artistic_merge":
-        # Create an artistic fusion description
-        subjects = ", ".join(all_elements['subjects'][:3]) if all_elements['subjects'] else "elements"
-        objects = ", ".join(all_elements['objects'][:3]) if all_elements['objects'] else ""
-        colors = ", ".join(all_elements['colors'][:3]) if all_elements['colors'] else ""
-        settings = ", ".join(all_elements['settings'][:2]) if all_elements['settings'] else ""
-        
-        prompt_parts = []
-        
-        if subjects:
-            prompt_parts.append(f"artistic fusion of {subjects}")
-        elif objects:
-            prompt_parts.append(f"artistic fusion of {objects}")
-        else:
-            prompt_parts.append("artistic fusion of multiple elements")
-        
-        if colors:
-            prompt_parts.append(f"featuring {colors} colors")
-        
-        if settings:
-            prompt_parts.append(f"in a {settings} setting")
-        
-        prompt_parts.append("dreamlike blend, surreal composition, harmonious merger, artistic interpretation")
-        
-        return ", ".join(prompt_parts)
-    
+        return f"artistic blend of {len(captions)} images"
     elif blend_strategy == "descriptive_combine":
-        # Combine descriptions more literally
-        unique_words = set()
-        for caption in captions:
-            words = re.findall(r'\b\w+\b', caption.lower())
-            unique_words.update(words)
-        
-        # Filter out common words
-        common_words = {'a', 'an', 'the', 'is', 'are', 'with', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'this', 'that'}
-        meaningful_words = [word for word in unique_words if word not in common_words and len(word) > 2]
-        
-        # Create a descriptive prompt
-        return f"harmonious blend combining {', '.join(meaningful_words[:10])}, artistic fusion, dreamlike composition"
-    
-    else:  # fallback
-        return f"artistic blend of {len(captions)} images, surreal fusion, dreamlike composition"
+        return f"descriptive blend of {len(captions)} images"
+    else:
+        raise ValueError(f"Invalid blend strategy: {blend_strategy}")
 
 
 # -----------------------------------------------------------------------------
