@@ -19,7 +19,7 @@ import re
 import gc
 
 import torch
-from transformers import BlipProcessor, BlipForConditionalGeneration
+from transformers import LlavaProcessor, LlavaForConditionalGeneration
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 from PIL import Image
 from tqdm import tqdm
@@ -106,10 +106,10 @@ def blend_images_v2(
     device = _get_default_device(str(device) if device is not None else None)
     output_path = pathlib.Path(output_path)
 
-    print(f"Step 1: Loading vision-language model (BLIP-2) on {device}...")
-    # 1. Load BLIP-2 for image captioning
-    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+    print(f"Step 1: Loading vision-language model (LLaVA) on {device}...")
+    # 1. Load LLaVA for image captioning
+    processor = LlavaProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+    model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
     model = model.to(device)
     model.eval()
 
@@ -119,8 +119,18 @@ def blend_images_v2(
     for path in tqdm(image_paths, desc="Captioning images"):
         img = Image.open(path).convert("RGB")
         
-        # Generate caption
-        inputs = processor(img, return_tensors="pt").to(device)
+        # Generate caption using LLaVA conversation format
+        conversation = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What's in this image?"},
+                    {"type": "image", "image": img}
+                ]
+            }
+        ]
+
+        inputs = processor.apply_chat_template(conversation, return_tensors="pt").to(device)
         with torch.no_grad():
             generated_ids = model.generate(**inputs, max_length=50, num_beams=5)
         caption = processor.decode(generated_ids[0], skip_special_tokens=True)

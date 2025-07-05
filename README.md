@@ -83,7 +83,7 @@ python -m blend_images.blend_v2 \
 
 ### How it works
 
-1. **Vision-Language Model**: Uses BLIP-2 to generate text descriptions of each input image
+1. **Vision-Language Model**: Uses LLaVA to generate text descriptions of each input image
 2. **Text Blending**: Intelligently combines the descriptions using NLP techniques to create a unified prompt
 3. **Text-to-Image Generation**: Uses Stable Diffusion to generate the final blended image from the combined text prompt
 
