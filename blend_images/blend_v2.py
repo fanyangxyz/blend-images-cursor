@@ -1,8 +1,8 @@
 """Blend multiple images using vision-language model → LLM → text-to-image pipeline.
 
 This implementation uses open-weights models for each step:
-1. BLIP-2 for image captioning (vision-language model)
-2. Text processing to combine descriptions into a blend prompt
+1. LLaVA for image captioning (vision-language model)
+2. GPT-2 for intelligent text generation to create artistic blend descriptions
 3. Stable Diffusion for text-to-image generation (optimized for MacBook Air)
 
 Run as a CLI:
@@ -19,7 +19,7 @@ import re
 import gc
 
 import torch
-from transformers import LlavaProcessor, LlavaForConditionalGeneration
+from transformers import LlavaProcessor, LlavaForConditionalGeneration, GPT2LMHeadModel, GPT2Tokenizer
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 from PIL import Image
 from tqdm import tqdm
@@ -53,11 +53,57 @@ def _optimize_memory_for_device(device: torch.device):
         gc.collect()
 
 
-def _create_blend_prompt(captions: List[str]) -> str:
-    """Create a text prompt that describes the blend of multiple images."""
-    prompt = f"artistic blend of {len(captions)} images: "
-    prompt += ", ".join(captions)
-    return prompt
+def _create_blend_prompt(captions: List[str], device: torch.device) -> str:
+    """Create a text prompt that describes the blend of multiple images using an LLM."""
+    print("  Loading text generation model (GPT-2)...")
+
+    # Load GPT-2 model and tokenizer
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    model = GPT2LMHeadModel.from_pretrained("gpt2")
+    model = model.to(device)
+    model.eval()
+
+    # Add pad token if it doesn't exist
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    # Create a prompt for the LLM to generate a blend description
+    input_text = f"Given these image descriptions, create a creative artistic description of what a blended image would look like:\n\n"
+    for i, caption in enumerate(captions, 1):
+        input_text += f"Image {i}: {caption}\n"
+    input_text += "\nArtistic blend description:"
+
+    # Tokenize and generate
+    inputs = tokenizer.encode(input_text, return_tensors="pt", max_length=512, truncation=True)
+    inputs = inputs.to(device)
+
+    with torch.no_grad():
+        outputs = model.generate(
+            inputs,
+            max_length=inputs.shape[1] + 50,  # Generate 50 more tokens
+            num_return_sequences=1,
+            temperature=0.7,
+            do_sample=True,
+            pad_token_id=tokenizer.eos_token_id,
+            attention_mask=torch.ones_like(inputs)
+        )
+
+    # Decode the generated text
+    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    # Extract just the blend description part
+    blend_description = generated_text[len(input_text):].strip()
+
+    # Clean up the generated text (remove any incomplete sentences)
+    sentences = blend_description.split('.')
+    if len(sentences) > 1:
+        blend_description = '.'.join(sentences[:-1]) + '.'
+
+    # Clean up model from memory
+    del model, tokenizer
+    _optimize_memory_for_device(device)
+
+    return blend_description if blend_description else f"artistic blend of {len(captions)} images: " + ", ".join(captions)
 
 
 # -----------------------------------------------------------------------------
@@ -136,8 +182,8 @@ def blend_images_v2(
     _optimize_memory_for_device(device)
 
     print("Step 3: Creating blend description...")
-    # 3. Create blend prompt using LLM-like text processing
-    blend_prompt = _create_blend_prompt(captions)
+    # 3. Create blend prompt using actual LLM text generation
+    blend_prompt = _create_blend_prompt(captions, device)
     print(f"  Blend prompt: {blend_prompt}")
 
     print("Step 4: Loading Stable Diffusion (optimized for MacBook Air)...")

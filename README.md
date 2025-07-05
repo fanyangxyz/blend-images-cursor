@@ -68,9 +68,9 @@ Optional arguments:
 
 ## Method 2: Semantic Text Blending (`blend_v2.py`)
 
-**Approach**: Vision-language model → text processing → text-to-image generation
+**Approach**: Vision-language model → LLM text generation → text-to-image generation
 
-This method understands what's in the images through text descriptions, then generates a new image based on the combined concepts.
+This method understands what's in the images through text descriptions, uses an LLM to create intelligent artistic blend descriptions, then generates a new image based on the creative conceptual fusion.
 
 ### Quick start
 
@@ -83,10 +83,10 @@ python -m blend_images.blend_v2 \
 ### How it works
 
 1. **Vision-Language Model**: Uses LLaVA to generate text descriptions of each input image
-2. **Text Blending**: Combines the descriptions by concatenating them into a unified prompt
-3. **Text-to-Image Generation**: Uses Stable Diffusion to generate the final blended image from the combined text prompt
+2. **LLM Text Generation**: Uses GPT-2 to intelligently synthesize the descriptions into a creative artistic blend description
+3. **Text-to-Image Generation**: Uses Stable Diffusion to generate the final blended image from the LLM-generated prompt
 
-> **Why this works**: By working in semantic text space rather than pixel/latent space, this approach can create more creative and interpretive blends based on conceptual understanding of the image contents.
+> **Why this works**: By working in semantic text space rather than pixel/latent space, this approach can create more creative and interpretive blends. The LLM step ensures the final prompt is coherent and artistic rather than just a list of disconnected descriptions, leading to higher quality generated images.
 
 ### CLI options
 
@@ -116,12 +116,12 @@ Optional arguments:
 
 | Aspect | Method 1 (Latent Space) | Method 2 (Semantic Text) |
 |--------|------------------------|--------------------------|
-| **Approach** | Direct latent averaging | Text-based conceptual blending |
+| **Approach** | Direct latent averaging | LLM-enhanced conceptual blending |
 | **Fidelity** | High pixel-level fidelity | Creative interpretation |
 | **Speed** | Fast (~seconds) | Slower (~minutes) |
 | **Memory** | Lower (~335 MB VAE) | Higher (~multiple models) |
-| **Creativity** | Conservative blends | Artistic/interpretive blends |
-| **Best for** | Preserving image details | Creative artistic fusion |
+| **Creativity** | Conservative blends | Highly artistic/interpretive blends |
+| **Best for** | Preserving image details | Creative artistic fusion with coherent narratives |
 
 ---
 
@@ -139,7 +139,7 @@ Optional arguments:
 * **Aspect Ratios**: All images are center-cropped to squares before processing
 * **Method Selection**: 
   - Choose **Method 1** for preserving image details and fast processing
-  - Choose **Method 2** for creative, artistic interpretations and conceptual blending
+  - Choose **Method 2** for creative, artistic interpretations with coherent narratives and high-quality conceptual blending
 
 ### Experimentation
 
