@@ -53,6 +53,7 @@ def blend_images(
     image_paths: List[str | pathlib.Path],
     output_path: str | pathlib.Path = "blended.png",
     size: int = 512,
+    blend_mode: str = "mean",
     device: str | torch.device | None = None,
 ) -> pathlib.Path:
     """Blend multiple images via latent-space averaging.
@@ -65,6 +66,8 @@ def blend_images(
         Where to save the blended output.
     size : int, default ``512``
         Images are resized to ``size × size`` before encoding.
+    blend_mode : {"mean", "max"}, default ``"mean"``
+        Strategy to merge individual image latents.
     device : str | torch.device | None, default ``None``
         Torch device to run on. If *None*, auto-detect.
 
@@ -105,10 +108,14 @@ def blend_images(
             latent = latent_dist.sample() * 0.18215  # scale like Stable Diffusion
         latents_list.append(latent)
 
-    # 3. Average latents
+    # 3. Combine latents (mean or max)
     latents = torch.cat(latents_list, dim=0)
-    mixed_latent = latents.mean(dim=0, keepdim=True)
-
+    if blend_mode == "mean":
+        mixed_latent = latents.mean(dim=0, keepdim=True)
+    elif blend_mode == "max":
+        mixed_latent = latents.max(dim=0, keepdim=True).values
+    else:
+        raise ValueError("blend_mode must be 'mean' or 'max'")
     # 4. Decode
     with torch.no_grad():
         decoded = vae.decode(mixed_latent / 0.18215).sample  # undo scaling
@@ -136,6 +143,12 @@ def _parse_args() -> argparse.Namespace:  # noqa: D401
     parser.add_argument("--output", "-o", default="blended.png", help="Output filename.")
     parser.add_argument("--size", type=int, default=512, help="Resize resolution (square).")
     parser.add_argument("--device", default=None, help="Torch device to run on (optional).")
+    parser.add_argument(
+        "--blend-mode",
+        choices=["mean", "max"],
+        default="mean",
+        help="How to combine latents: mean (average) or max (element-wise maximum).",
+    )
     return parser.parse_args()
 
 
@@ -146,6 +159,7 @@ def main() -> None:  # noqa: D401
         image_paths=args.images,
         output_path=args.output,
         size=args.size,
+        blend_mode=args.blend_mode,
         device=args.device,
     )
     print(f"Saved blended image to {args.output}")

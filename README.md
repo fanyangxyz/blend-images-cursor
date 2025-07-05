@@ -21,7 +21,8 @@ pip install -r requirements.txt
 # 4. Run the blender
 python -m blend_images.blend \
     path/to/photo1.jpg path/to/photo2.png path/to/photo3.jpeg \
-    --output blended.png
+    --output blended.png \
+    --blend-mode mean
 ```
 
 The first run will automatically **download** the open weights (the VAE) from Hugging Face.
@@ -29,7 +30,7 @@ The first run will automatically **download** the open weights (the VAE) from Hu
 ### CLI options
 
 ```
-usage: blend.py [-h] [--output OUTPUT] [--size SIZE] [--device DEVICE] images [images ...]
+usage: blend.py [-h] [--output OUTPUT] [--size SIZE] [--blend-mode {mean,max}] [--device DEVICE] images [images ...]
 
 Positional arguments:
   images                Paths of the images you want to blend (≥2).
@@ -39,6 +40,8 @@ Optional arguments:
   --output OUTPUT, -o OUTPUT
                         Output filename (default: blended.png)
   --size SIZE           Square resolution the images will be resized to (default: 512)
+  --blend-mode {mean,max}
+                        How to combine latents: mean (average) or max (element-wise maximum). (default: mean)
   --device DEVICE       Torch device to run on (e.g. cuda, mps, cpu). Auto-detected by default.
 ```
 
