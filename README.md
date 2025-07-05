@@ -77,14 +77,13 @@ This method understands what's in the images through text descriptions, then gen
 ```bash
 python -m blend_images.blend_v2 \
     path/to/photo1.jpg path/to/photo2.png path/to/photo3.jpeg \
-    --output blended_v2.png \
-    --blend-strategy artistic_merge
+    --output blended_v2.png
 ```
 
 ### How it works
 
 1. **Vision-Language Model**: Uses LLaVA to generate text descriptions of each input image
-2. **Text Blending**: Intelligently combines the descriptions using NLP techniques to create a unified prompt
+2. **Text Blending**: Combines the descriptions by concatenating them into a unified prompt
 3. **Text-to-Image Generation**: Uses Stable Diffusion to generate the final blended image from the combined text prompt
 
 > **Why this works**: By working in semantic text space rather than pixel/latent space, this approach can create more creative and interpretive blends based on conceptual understanding of the image contents.
@@ -92,8 +91,8 @@ python -m blend_images.blend_v2 \
 ### CLI options
 
 ```
-usage: blend_v2.py [-h] [--output OUTPUT] [--size SIZE] [--blend-strategy {artistic_merge,descriptive_combine}] 
-                   [--guidance-scale GUIDANCE_SCALE] [--num-inference-steps NUM_INFERENCE_STEPS] [--device DEVICE] 
+usage: blend_v2.py [-h] [--output OUTPUT] [--size SIZE] [--guidance-scale GUIDANCE_SCALE] 
+                   [--num-inference-steps NUM_INFERENCE_STEPS] [--device DEVICE] 
                    images [images ...]
 
 Positional arguments:
@@ -103,20 +102,13 @@ Optional arguments:
   -h, --help            show this help message and exit
   --output OUTPUT, -o OUTPUT
                         Output filename (default: blended_v2.png)
-  --size SIZE           Output image size (square) (default: 512)
-  --blend-strategy {artistic_merge,descriptive_combine}
-                        Strategy for combining image descriptions (default: artistic_merge)
+  --size SIZE           Output image size (square) (default: 384)
   --guidance-scale GUIDANCE_SCALE
                         Guidance scale for text-to-image generation (default: 7.5)
   --num-inference-steps NUM_INFERENCE_STEPS
-                        Number of inference steps for text-to-image generation (default: 50)
+                        Number of inference steps for text-to-image generation (default: 25)
   --device DEVICE       Torch device to run on (e.g. cuda, mps, cpu). Auto-detected by default.
 ```
-
-### Blend strategies
-
-- **`artistic_merge`**: Creates an artistic fusion description by extracting and combining key elements (subjects, objects, colors, settings)
-- **`descriptive_combine`**: Combines unique descriptive words from all captions into a harmonious blend prompt
 
 ---
 
@@ -152,7 +144,7 @@ Optional arguments:
 ### Experimentation
 
 * **Method 1**: Try different blend modes (`mean` vs `max`) or experiment with weighted averages
-* **Method 2**: Experiment with different blend strategies and adjust guidance scale for varying creativity levels
+* **Method 2**: Adjust guidance scale and inference steps for varying creativity levels and quality
 
 ---
 

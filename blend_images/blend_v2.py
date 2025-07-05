@@ -53,14 +53,11 @@ def _optimize_memory_for_device(device: torch.device):
         gc.collect()
 
 
-def _create_blend_prompt(captions: List[str], blend_strategy: str = "artistic_merge") -> str:
+def _create_blend_prompt(captions: List[str]) -> str:
     """Create a text prompt that describes the blend of multiple images."""
-    if blend_strategy == "artistic_merge":
-        return f"artistic blend of {len(captions)} images"
-    elif blend_strategy == "descriptive_combine":
-        return f"descriptive blend of {len(captions)} images"
-    else:
-        raise ValueError(f"Invalid blend strategy: {blend_strategy}")
+    prompt = f"artistic blend of {len(captions)} images: "
+    prompt += ", ".join(captions)
+    return prompt
 
 
 # -----------------------------------------------------------------------------
@@ -71,7 +68,6 @@ def blend_images_v2(
     image_paths: List[str | pathlib.Path],
     output_path: str | pathlib.Path = "blended_v2.png",
     size: int = 384,  # Reduced default size for MacBook Air
-    blend_strategy: str = "artistic_merge",
     device: str | torch.device | None = None,
     guidance_scale: float = 7.5,
     num_inference_steps: int = 25,  # Reduced default steps for MacBook Air
@@ -86,8 +82,6 @@ def blend_images_v2(
         Where to save the blended output.
     size : int, default ``384``
         Output image size (square). Reduced default for MacBook Air.
-    blend_strategy : {"artistic_merge", "descriptive_combine"}, default ``"artistic_merge"``
-        Strategy for combining image descriptions.
     device : str | torch.device | None, default ``None``
         Torch device to run on. If *None*, auto-detect.
     guidance_scale : float, default ``7.5``
@@ -143,7 +137,7 @@ def blend_images_v2(
 
     print("Step 3: Creating blend description...")
     # 3. Create blend prompt using LLM-like text processing
-    blend_prompt = _create_blend_prompt(captions, blend_strategy)
+    blend_prompt = _create_blend_prompt(captions)
     print(f"  Blend prompt: {blend_prompt}")
 
     print("Step 4: Loading Stable Diffusion (optimized for MacBook Air)...")
@@ -215,12 +209,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--size", type=int, default=384, help="Output image size (square). Default optimized for MacBook Air.")
     parser.add_argument("--device", default=None, help="Torch device to run on (optional).")
     parser.add_argument(
-        "--blend-strategy",
-        choices=["artistic_merge", "descriptive_combine"],
-        default="artistic_merge",
-        help="Strategy for combining image descriptions.",
-    )
-    parser.add_argument(
         "--guidance-scale",
         type=float,
         default=7.5,
@@ -242,7 +230,6 @@ def main() -> None:
         image_paths=args.images,
         output_path=args.output,
         size=args.size,
-        blend_strategy=args.blend_strategy,
         device=args.device,
         guidance_scale=args.guidance_scale,
         num_inference_steps=args.num_inference_steps,
