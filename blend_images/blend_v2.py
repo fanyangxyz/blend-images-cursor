@@ -43,17 +43,11 @@ def _get_default_device(user_choice: str | None = None) -> torch.device:
 
 def _optimize_memory_for_device(device: torch.device):
     """Apply memory optimizations based on device type."""
-    # Always run garbage collection first
-    gc.collect()
-
     if device.type == "mps":
         # MPS-specific optimizations
         torch.mps.empty_cache()
-        # Force additional garbage collection for MPS
-        gc.collect()
     elif device.type == "cuda":
         torch.cuda.empty_cache()
-        gc.collect()
     else:
         # CPU optimizations
         gc.collect()
@@ -63,21 +57,10 @@ def _create_blend_prompt(captions: List[str], device: torch.device) -> str:
     """Create a text prompt that describes the blend of multiple images using an LLM."""
     print("  Loading text generation model (GPT-2)...")
 
-    # Load GPT-2 model and tokenizer with memory optimizations
+    # Load GPT-2 model and tokenizer
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    model = GPT2LMHeadModel.from_pretrained(
-        "gpt2",
-        torch_dtype=torch.float16 if device.type in ["cuda", "mps"] else torch.float32,
-        low_cpu_mem_usage=True,
-    )
-
-    # For MPS, keep GPT-2 on CPU to save memory
-    if device.type == "mps":
-        model = model.to("cpu")
-        model_device = "cpu"
-    else:
-        model = model.to(device)
-        model_device = device
+    model = GPT2LMHeadModel.from_pretrained("gpt2")
+    model = model.to(device)
     model.eval()
 
     # Add pad token if it doesn't exist
@@ -92,7 +75,7 @@ def _create_blend_prompt(captions: List[str], device: torch.device) -> str:
 
     # Tokenize and generate
     inputs = tokenizer.encode(input_text, return_tensors="pt", max_length=512, truncation=True)
-    inputs = inputs.to(model_device)
+    inputs = inputs.to(device)
 
     with torch.no_grad():
         outputs = model.generate(
@@ -117,7 +100,7 @@ def _create_blend_prompt(captions: List[str], device: torch.device) -> str:
         blend_description = '.'.join(sentences[:-1]) + '.'
 
     # Clean up model from memory
-    del model, tokenizer, inputs, outputs
+    del model, tokenizer
     _optimize_memory_for_device(device)
 
     return blend_description if blend_description else f"artistic blend of {len(captions)} images: " + ", ".join(captions)
@@ -164,21 +147,10 @@ def blend_images_v2(
     output_path = pathlib.Path(output_path)
 
     print(f"Step 1: Loading vision-language model (LLaVA) on {device}...")
-    # 1. Load LLaVA for image captioning - using smaller variant for MacBook Air
+    # 1. Load LLaVA for image captioning
     processor = LlavaProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
-    model = LlavaForConditionalGeneration.from_pretrained(
-        "llava-hf/llava-1.5-7b-hf",
-        torch_dtype=torch.float16 if device.type in ["cuda", "mps"] else torch.float32,
-        device_map="auto" if device.type != "mps" else None,  # Auto device mapping for CUDA, manual for MPS
-        low_cpu_mem_usage=True,
-    )
-
-    # For MPS, use CPU offloading to manage memory
-    if device.type == "mps":
-        # Don't move entire model to MPS, keep some on CPU
-        model = model.to("cpu")  # Keep model on CPU initially
-    else:
-        model = model.to(device)
+    model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
+    model = model.to(device)
     model.eval()
 
     print("Step 2: Generating image descriptions...")
@@ -186,34 +158,27 @@ def blend_images_v2(
     captions = []
     for path in tqdm(image_paths, desc="Captioning images"):
         img = Image.open(path).convert("RGB")
+        
+        # Generate caption using LLaVA conversation format
+        conversation = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What's in this image?"},
+                    {"type": "image", "image": img}
+                ]
+            }
+        ]
 
-        # Generate caption using LLaVA format
-        prompt = "USER: <image>\nWhat's in this image?\nASSISTANT:"
-
-        inputs = processor(text=prompt, images=img, return_tensors="pt")
-
-        # Handle device placement for MPS memory optimization
-        if device.type == "mps":
-            # Keep inputs on CPU for MPS to avoid memory issues
-            inputs = {k: v.to("cpu") if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
-            model_device = "cpu"
-        else:
-            inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
-            model_device = device
-
+        inputs = processor.apply_chat_template(conversation, return_tensors="pt").to(device)
         with torch.no_grad():
-            generated_ids = model.generate(**inputs, max_new_tokens=100, num_beams=5)
+            generated_ids = model.generate(**inputs, max_length=50, num_beams=5)
         caption = processor.decode(generated_ids[0], skip_special_tokens=True)
         captions.append(caption)
         print(f"  {pathlib.Path(path).name}: {caption}")
 
-    # Clear LLaVA model from memory
+    # Clear BLIP model from memory
     del model, processor
-    # Force aggressive cleanup for MPS
-    if device.type == "mps":
-        torch.mps.empty_cache()
-        gc.collect()
-        torch.mps.empty_cache()
     _optimize_memory_for_device(device)
 
     print("Step 3: Creating blend description...")
@@ -228,33 +193,28 @@ def blend_images_v2(
     # Load with optimizations
     pipe = StableDiffusionPipeline.from_pretrained(
         model_id,
-        torch_dtype=torch.float16 if device.type in ["cuda", "mps"] else torch.float32,
+        torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
         safety_checker=None,
-        requires_safety_checker=False,
-        low_cpu_mem_usage=True,
+        requires_safety_checker=False
     )
-
+    
     # Use faster scheduler for fewer steps
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-
+    pipe = pipe.to(device)
+    
+    # Enable memory efficient attention if available
+    if hasattr(pipe.unet, 'set_use_memory_efficient_attention_xformers'):
+        try:
+            pipe.enable_xformers_memory_efficient_attention()
+        except:
+            pass
+    
     # MacBook Air specific optimizations
     if device.type == "mps":
         # Enable attention slicing for MPS
         pipe.enable_attention_slicing()
         # Enable model CPU offloading for very limited memory
-        pipe.enable_model_cpu_offload()  # Enable CPU offloading for MPS
-        # Enable VAE slicing to reduce memory usage
-        pipe.enable_vae_slicing()
-        print("  Enabled MPS optimizations: attention slicing, model CPU offload, VAE slicing")
-    else:
-        pipe = pipe.to(device)
-
-        # Enable memory efficient attention if available
-        if hasattr(pipe.unet, 'set_use_memory_efficient_attention_xformers'):
-            try:
-                pipe.enable_xformers_memory_efficient_attention()
-            except:
-                pass
+        # pipe.enable_model_cpu_offload()  # Uncomment if still running out of memory
     
     print(f"Generating blended image ({size}x{size}, {num_inference_steps} steps)...")
     # 5. Generate the blended image
