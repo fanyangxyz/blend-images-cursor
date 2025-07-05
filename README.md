@@ -1,13 +1,10 @@
 # Blend Images with Open Weights
 
-This project demonstrates how to blend (merge) multiple images into a single output image using **open-source neural-network weights**.  
-We leverage the *Stable Diffusion* VAE (Variational Auto-Encoder) from Hugging Face (`stabilityai/sd-vae-ft-mse`) to encode each input image into a latent space, average the latent representations, and decode the averaged latent back to pixel space.  The result is a visually plausible blend of the inputs.
-
-> **Why the VAE?**  The VAE component of Stable Diffusion is small (~335 MB), publicly licensed, and can reconstruct high-quality 512×512 RGB images.  Averaging in latent space often yields smoother, more natural blends than simple pixel-space alpha blending.
+This project demonstrates **two different approaches** to blend (merge) multiple images into a single output image using **open-source neural-network weights**. Both methods leverage different aspects of modern AI models to create visually compelling blends.
 
 ---
 
-## Quick start
+## Setup
 
 ```bash
 # 1. Clone this repo (or copy the code)
@@ -17,15 +14,37 @@ source .venv/bin/activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
+```
 
-# 4. Run the blender
+The first run of either method will automatically **download** the required open weights from Hugging Face.
+
+---
+
+## Method 1: Latent Space Blending (`blend.py`)
+
+**Approach**: Direct latent space averaging using Stable Diffusion's VAE
+
+This method encodes images into a latent space, averages the latent representations, and decodes back to pixel space.
+
+### Quick start
+
+```bash
 python -m blend_images.blend \
     path/to/photo1.jpg path/to/photo2.png path/to/photo3.jpeg \
     --output blended.png \
     --blend-mode mean
 ```
 
-The first run will automatically **download** the open weights (the VAE) from Hugging Face.
+### How it works
+
+1. **Load** the open-weights VAE (`AutoencoderKL`) from `stabilityai/sd-vae-ft-mse`
+2. **Pre-process** each input image: convert to RGB, square-pad & resize
+3. **Encode** each image into latent space: `latent = encoder(image).latent_dist.sample()`
+4. **Average** all latents (mean or max operation)
+5. **Decode** the averaged latent back to pixel space
+6. **Post-process** & save the resulting image
+
+> **Why this works**: The VAE component (~335 MB) is small, publicly licensed, and averaging in latent space often yields smoother, more natural blends than simple pixel-space alpha blending.
 
 ### CLI options
 
@@ -47,26 +66,93 @@ Optional arguments:
 
 ---
 
-## How it works
+## Method 2: Semantic Text Blending (`blend_v2.py`)
 
-1. **Load** the open-weights VAE (`AutoencoderKL`) via the [🤗 Diffusers](https://github.com/huggingface/diffusers) library.
-2. **Pre-process** each input image:
-   * Convert to RGB, square-pad & resize.
-   * Map pixel range from `[0, 255]` → `[-1, 1]` to match the VAE's expected scale.
-3. **Encode** each image into latent space: `latent = encoder(image).latent_dist.sample()`
-4. **Average** all latents (simple mean).
-5. **Decode** the averaged latent back to pixel space.
-6. **Post-process** & save the resulting image.
+**Approach**: Vision-language model → text processing → text-to-image generation
 
-The only learnable part is the VAE, whose weights are freely available under a permissive license.
+This method understands what's in the images through text descriptions, then generates a new image based on the combined concepts.
+
+### Quick start
+
+```bash
+python -m blend_images.blend_v2 \
+    path/to/photo1.jpg path/to/photo2.png path/to/photo3.jpeg \
+    --output blended_v2.png \
+    --blend-strategy artistic_merge
+```
+
+### How it works
+
+1. **Vision-Language Model**: Uses BLIP-2 to generate text descriptions of each input image
+2. **Text Blending**: Intelligently combines the descriptions using NLP techniques to create a unified prompt
+3. **Text-to-Image Generation**: Uses Stable Diffusion to generate the final blended image from the combined text prompt
+
+> **Why this works**: By working in semantic text space rather than pixel/latent space, this approach can create more creative and interpretive blends based on conceptual understanding of the image contents.
+
+### CLI options
+
+```
+usage: blend_v2.py [-h] [--output OUTPUT] [--size SIZE] [--blend-strategy {artistic_merge,descriptive_combine}] 
+                   [--guidance-scale GUIDANCE_SCALE] [--num-inference-steps NUM_INFERENCE_STEPS] [--device DEVICE] 
+                   images [images ...]
+
+Positional arguments:
+  images                Paths of the images you want to blend (≥2).
+
+Optional arguments:
+  -h, --help            show this help message and exit
+  --output OUTPUT, -o OUTPUT
+                        Output filename (default: blended_v2.png)
+  --size SIZE           Output image size (square) (default: 512)
+  --blend-strategy {artistic_merge,descriptive_combine}
+                        Strategy for combining image descriptions (default: artistic_merge)
+  --guidance-scale GUIDANCE_SCALE
+                        Guidance scale for text-to-image generation (default: 7.5)
+  --num-inference-steps NUM_INFERENCE_STEPS
+                        Number of inference steps for text-to-image generation (default: 50)
+  --device DEVICE       Torch device to run on (e.g. cuda, mps, cpu). Auto-detected by default.
+```
+
+### Blend strategies
+
+- **`artistic_merge`**: Creates an artistic fusion description by extracting and combining key elements (subjects, objects, colors, settings)
+- **`descriptive_combine`**: Combines unique descriptive words from all captions into a harmonious blend prompt
 
 ---
 
-## Notes
+## Comparison of Methods
 
-* If you have an Apple Silicon Mac, the script will automatically use the *MPS* backend (macOS GPU) when available.
-* For best quality, supply images with visually related content and similar aspect ratios. All images are center-cropped to a square before blending.
-* You can experiment with different latent-space operations (e.g., weighted averages) to influence the blend.
+| Aspect | Method 1 (Latent Space) | Method 2 (Semantic Text) |
+|--------|------------------------|--------------------------|
+| **Approach** | Direct latent averaging | Text-based conceptual blending |
+| **Fidelity** | High pixel-level fidelity | Creative interpretation |
+| **Speed** | Fast (~seconds) | Slower (~minutes) |
+| **Memory** | Lower (~335 MB VAE) | Higher (~multiple models) |
+| **Creativity** | Conservative blends | Artistic/interpretive blends |
+| **Best for** | Preserving image details | Creative artistic fusion |
+
+---
+
+## Usage Notes
+
+### Performance Optimization
+
+* **Apple Silicon Mac**: Both methods automatically use the *MPS* backend (macOS GPU) when available
+* **GPU Memory**: Method 2 uses more GPU memory due to multiple models; Method 1 is more memory-efficient
+* **Speed**: Method 1 is significantly faster for quick blending tasks
+
+### Best Practices
+
+* **Image Quality**: For best results with either method, supply images with visually related content
+* **Aspect Ratios**: All images are center-cropped to squares before processing
+* **Method Selection**: 
+  - Choose **Method 1** for preserving image details and fast processing
+  - Choose **Method 2** for creative, artistic interpretations and conceptual blending
+
+### Experimentation
+
+* **Method 1**: Try different blend modes (`mean` vs `max`) or experiment with weighted averages
+* **Method 2**: Experiment with different blend strategies and adjust guidance scale for varying creativity levels
 
 ---
 
