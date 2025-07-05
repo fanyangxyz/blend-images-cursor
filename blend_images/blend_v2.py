@@ -1,7 +1,7 @@
 """Blend multiple images using vision-language model → LLM → text-to-image pipeline.
 
 This implementation uses open-weights models for each step:
-1. LLaVA for image captioning (vision-language model)
+1. BLIP for image captioning (vision-language model, lightweight)
 2. GPT-2 for intelligent text generation to create artistic blend descriptions
 3. Stable Diffusion for text-to-image generation (optimized for MacBook Air)
 
@@ -19,7 +19,7 @@ import re
 import gc
 
 import torch
-from transformers import LlavaProcessor, LlavaForConditionalGeneration, GPT2LMHeadModel, GPT2Tokenizer
+from transformers import BlipProcessor, BlipForConditionalGeneration, GPT2LMHeadModel, GPT2Tokenizer
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 from PIL import Image
 from tqdm import tqdm
@@ -118,7 +118,7 @@ def blend_images_v2(
     guidance_scale: float = 7.5,
     num_inference_steps: int = 25,  # Reduced default steps for MacBook Air
 ) -> pathlib.Path:
-    """Blend multiple images using vision-language model → LLM → text-to-image pipeline.
+    """Blend multiple images using BLIP → LLM → text-to-image pipeline.
 
     Parameters
     ----------
@@ -146,10 +146,10 @@ def blend_images_v2(
     device = _get_default_device(str(device) if device is not None else None)
     output_path = pathlib.Path(output_path)
 
-    print(f"Step 1: Loading vision-language model (LLaVA) on {device}...")
-    # 1. Load LLaVA for image captioning
-    processor = LlavaProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
-    model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
+    print(f"Step 1: Loading vision-language model (BLIP) on {device}...")
+    # 1. Load BLIP for image captioning - much lighter than LLaVA
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
     model = model.to(device)
     model.eval()
 
@@ -159,18 +159,8 @@ def blend_images_v2(
     for path in tqdm(image_paths, desc="Captioning images"):
         img = Image.open(path).convert("RGB")
         
-        # Generate caption using LLaVA conversation format
-        conversation = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "What's in this image?"},
-                    {"type": "image", "image": img}
-                ]
-            }
-        ]
-
-        inputs = processor.apply_chat_template(conversation, return_tensors="pt").to(device)
+        # Generate caption using BLIP
+        inputs = processor(img, return_tensors="pt").to(device)
         with torch.no_grad():
             generated_ids = model.generate(**inputs, max_length=50, num_beams=5)
         caption = processor.decode(generated_ids[0], skip_special_tokens=True)

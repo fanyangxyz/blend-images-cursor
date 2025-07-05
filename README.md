@@ -82,7 +82,7 @@ python -m blend_images.blend_v2 \
 
 ### How it works
 
-1. **Vision-Language Model**: Uses LLaVA to generate text descriptions of each input image
+1. **Vision-Language Model**: Uses BLIP (a lightweight image captioning model) to generate text descriptions of each input image
 2. **LLM Text Generation**: Uses GPT-2 to intelligently synthesize the descriptions into a creative artistic blend description
 3. **Text-to-Image Generation**: Uses Stable Diffusion to generate the final blended image from the LLM-generated prompt
 
@@ -119,7 +119,7 @@ Optional arguments:
 | **Approach** | Direct latent averaging | LLM-enhanced conceptual blending |
 | **Fidelity** | High pixel-level fidelity | Creative interpretation |
 | **Speed** | Fast (~seconds) | Slower (~minutes) |
-| **Memory** | Lower (~335 MB VAE) | Higher (~multiple models) |
+| **Memory** | Lower (~335 MB VAE) | Medium (~lightweight BLIP + GPT-2 + SD) |
 | **Creativity** | Conservative blends | Highly artistic/interpretive blends |
 | **Best for** | Preserving image details | Creative artistic fusion with coherent narratives |
 
@@ -130,7 +130,7 @@ Optional arguments:
 ### Performance Optimization
 
 * **Apple Silicon Mac**: Both methods automatically use the *MPS* backend (macOS GPU) when available
-* **GPU Memory**: Method 2 uses more GPU memory due to multiple models; Method 1 is more memory-efficient
+* **GPU Memory**: Method 2 uses more GPU memory due to multiple models, but is optimized for MacBook Air with lightweight BLIP; Method 1 is more memory-efficient
 * **Speed**: Method 1 is significantly faster for quick blending tasks
 
 ### Best Practices
